@@ -1,0 +1,34 @@
+server:
+  port: 9100 # 网关入口端口
+
+spring:
+  application:
+    name: freshmall-gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 127.0.0.1:9848
+    gateway:
+      globalcors:
+        cors-configurations:
+          "[/**]":
+            allowedOrigins: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+      discovery:
+        locator:
+          enabled: true # 开启从注册中心动态创建路由的功能
+      routes:
+        # 用户服务路由
+        - id: user_route
+          uri: lb://freshmall-user
+          predicates:
+            - Path=/api/user/**
+          filters:
+            - StripPrefix=1
+
+        # 静态资源路由 (图片等)
+        - id: static_files_route
+          uri: lb://freshmall-user
+          predicates:
+            - Path=/staticfiles/**
