@@ -1,19 +1,19 @@
 server:
-  port: 9201 # 用户服务端口
+  port: 9202 # 商品服务端口
 
-# 自定义文件上传路?
+# 自定义文件上传路
 File:
   uploadPath: E:/test/ncp/freshmall/server/upload/
 
 spring:
   application:
-    name: freshmall-user
+    name: freshmall-thing
   cloud:
     nacos:
       discovery:
         server-addr: 127.0.0.1:9848
 
-  # 数据源配?
+  # 数据源配
   datasource:
     username: root
     password: root
@@ -43,7 +43,7 @@ spring:
       max-file-size: 1MB
       enabled: true
 
-  # 静态资源映�?(Spring Boot 2.x)
+  # 静态资源映Spring Boot 2.x)
   web:
     resources:
       static-locations: file:${File.uploadPath}

@@ -7,6 +7,7 @@ import com.freshmall.user.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
@@ -69,6 +70,16 @@ public class UserController {
         } else {
             return new APIResponse(ResponseCode.FAIL, "账号或密码错误");
         }
+    }
+
+    // ===== 内部 Feign 接口（供其他微服务调用） =====
+
+    /**
+     * 获取用户详情（仅供服务间调用）
+     */
+    @RequestMapping(value = "/inner/detail", method = RequestMethod.GET)
+    public User innerDetail(@RequestParam String id) {
+        return service.getUserDetail(id);
     }
 
     @RequestMapping(value = "/adminLogin", method = RequestMethod.POST)

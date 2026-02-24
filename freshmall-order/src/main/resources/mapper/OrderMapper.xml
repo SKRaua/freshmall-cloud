@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.freshmall.order.mapper.OrderMapper">
+
+    <!-- 管理员查询全部订单（仅查 b_order 表，用户名和商品名由 Service 层通过 Feign 补充） -->
+    <select id="getList" resultType="com.freshmall.common.entity.Order">
+        select * from b_order
+        order by order_time desc
+    </select>
+
+    <!-- 用户查询自己的订单 -->
+    <select id="getUserOrderList" resultType="com.freshmall.common.entity.Order">
+        select * from b_order
+        where 2 > 1
+        <if test="userId != null">
+            and user_id = #{userId}
+        </if>
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        order by order_time desc
+    </select>
+
+</mapper>

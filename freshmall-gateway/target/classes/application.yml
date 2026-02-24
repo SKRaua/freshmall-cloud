@@ -1,4 +1,4 @@
-server:
+﻿server:
   port: 9100 # 网关入口端口
 
 spring:
@@ -27,8 +27,26 @@ spring:
           filters:
             - StripPrefix=1
 
+        # 商品服务路由
+        - id: thing_route
+          uri: lb://freshmall-thing
+          predicates:
+            - Path=/api/thing/**, /api/classification/**, /api/thingCollect/**, /api/thingWish/**, /api/record/**
+          filters:
+            - StripPrefix=1
+
+        # 订单服务路由
+        - id: order_route
+          uri: lb://freshmall-order
+          predicates:
+            - Path=/api/order/**
+          filters:
+            - StripPrefix=1
+
         # 静态资源路由 (图片等)
         - id: static_files_route
-          uri: lb://freshmall-user
+          uri: lb://freshmall-thing
           predicates:
-            - Path=/staticfiles/**
+            - Path=/api/staticfiles/**
+          filters:
+            - StripPrefix=1

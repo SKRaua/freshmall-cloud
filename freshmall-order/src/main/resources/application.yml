@@ -1,19 +1,15 @@
 server:
-  port: 9201 # 用户服务端口
-
-# 自定义文件上传路?
-File:
-  uploadPath: E:/test/ncp/freshmall/server/upload/
+  port: 9203 # 订单服务端口
 
 spring:
   application:
-    name: freshmall-user
+    name: freshmall-order
   cloud:
     nacos:
       discovery:
         server-addr: 127.0.0.1:9848
 
-  # 数据源配?
+  # 数据源配置
   datasource:
     username: root
     password: root
@@ -36,19 +32,6 @@ spring:
       maxPoolPreparedStatementPerConnectionSize: 20
       filters: stat,slf4j
       connectionProperties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=5000
-
-  servlet:
-    multipart:
-      max-request-size: 10MB
-      max-file-size: 1MB
-      enabled: true
-
-  # 静态资源映�?(Spring Boot 2.x)
-  web:
-    resources:
-      static-locations: file:${File.uploadPath}
-  mvc:
-    static-path-pattern: /staticfiles/**
 
 # 配置 MyBatis Plus
 mybatis-plus:

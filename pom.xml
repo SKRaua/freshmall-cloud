@@ -18,6 +18,8 @@
         <module>freshmall-common</module>
         <module>freshmall-user</module>
         <module>freshmall-gateway</module>
+        <module>freshmall-thing</module>
+        <module>freshmall-order</module>
     </modules>
 
     <properties>
@@ -26,6 +28,9 @@
         <spring-cloud-alibaba.version>2021.1</spring-cloud-alibaba.version>
         <mysql.version>8.0.26</mysql.version>
         <mybatis-plus.version>3.4.3</mybatis-plus.version>
+
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
 
     <dependencyManagement>
