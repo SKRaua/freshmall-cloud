@@ -3,7 +3,8 @@ server:
 
 # 自定义文件上传路
 File:
-  uploadPath: E:/test/ncp/freshmall/server/upload/
+  # uploadPath: E:/test/ncp/freshmall/server/upload/
+  uploadPath: ${user.home}/freshmall/upload
 
 spring:
   application:
@@ -11,7 +12,7 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: 127.0.0.1:9848
+        server-addr: 127.0.0.1:8848
 
   # 数据源配
   datasource:

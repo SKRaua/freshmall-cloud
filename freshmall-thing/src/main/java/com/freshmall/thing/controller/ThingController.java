@@ -3,6 +3,7 @@ package com.freshmall.thing.controller;
 import com.freshmall.common.APIResponse;
 import com.freshmall.common.ResponseCode;
 import com.freshmall.common.entity.*;
+import com.freshmall.common.entity.Record;
 import com.freshmall.thing.service.RecordService;
 import com.freshmall.thing.service.ThingService;
 import com.freshmall.common.utils.IpUtils;

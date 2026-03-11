@@ -3,15 +3,15 @@ server:
 
 # 自定义文件上传路?
 File:
-  uploadPath: E:/test/ncp/freshmall/server/upload/
-
+  # uploadPath: E:/test/ncp/freshmall/server/upload/
+  uploadPath: ${user.home}/freshmall/upload
 spring:
   application:
     name: freshmall-user
   cloud:
     nacos:
       discovery:
-        server-addr: 127.0.0.1:9848
+        server-addr: 127.0.0.1:8848
 
   # 数据源配?
   datasource:
@@ -43,7 +43,7 @@ spring:
       max-file-size: 1MB
       enabled: true
 
-  # 静态资源映�?(Spring Boot 2.x)
+  # 静态资源映?(Spring Boot 2.x)
   web:
     resources:
       static-locations: file:${File.uploadPath}

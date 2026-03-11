@@ -1,13 +1,16 @@
 ﻿server:
   port: 9100 # 网关入口端口
 
+File:
+  uploadPath: ${user.home}/freshmall/upload
+
 spring:
   application:
     name: freshmall-gateway
   cloud:
     nacos:
       discovery:
-        server-addr: 127.0.0.1:9848
+        server-addr: 127.0.0.1:8848
     gateway:
       globalcors:
         cors-configurations:
@@ -43,10 +46,8 @@ spring:
           filters:
             - StripPrefix=1
 
-        # 静态资源路由 (图片等)
-        - id: static_files_route
-          uri: lb://freshmall-thing
-          predicates:
-            - Path=/api/staticfiles/**
-          filters:
-            - StripPrefix=1
+  webflux:
+    static-path-pattern: /api/staticfiles/**
+  web:
+    resources:
+      static-locations: file:${File.uploadPath}
