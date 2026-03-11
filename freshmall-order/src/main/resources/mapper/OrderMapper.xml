@@ -5,6 +5,19 @@
     <!-- 管理员查询全部订单（仅查 b_order 表，用户名和商品名由 Service 层通过 Feign 补充） -->
     <select id="getList" resultType="com.freshmall.common.entity.Order">
         select * from b_order
+        where 1 = 1
+        <if test="orderNumber != null and orderNumber != ''">
+            and order_number like concat('%', #{orderNumber}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        <if test="startTime != null and startTime != ''">
+            and order_time                         <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            and order_time                         <![CDATA[ <= ]]> #{endTime}
+        </if>
         order by order_time desc
     </select>
 

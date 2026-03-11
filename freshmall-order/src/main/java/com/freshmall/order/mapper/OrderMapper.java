@@ -10,7 +10,10 @@ import java.util.List;
 @Mapper
 public interface OrderMapper extends BaseMapper<Order> {
 
-    List<Order> getList();
+    List<Order> getList(@Param("orderNumber") String orderNumber,
+            @Param("status") String status,
+            @Param("startTime") String startTime,
+            @Param("endTime") String endTime);
 
     List<Order> getUserOrderList(@Param("userId") String userId, @Param("status") String status);
 }

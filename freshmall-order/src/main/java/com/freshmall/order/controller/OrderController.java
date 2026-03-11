@@ -35,8 +35,8 @@ public class OrderController {
      * 管理员：查询全部订单列表
      */
     @RequestMapping(value = "/list", method = RequestMethod.GET)
-    public APIResponse list() {
-        List<Order> list = service.getOrderList();
+    public APIResponse list(String orderNumber, String username, String status, String startTime, String endTime) {
+        List<Order> list = service.getOrderList(orderNumber, username, status, startTime, endTime);
         return new APIResponse(ResponseCode.SUCCESS, "查询成功", list);
     }
 

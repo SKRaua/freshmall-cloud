@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -31,9 +32,16 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     UserFeignClient userFeignClient;
 
     @Override
-    public List<Order> getOrderList() {
-        List<Order> orders = mapper.getList();
+    public List<Order> getOrderList(String orderNumber, String username, String status, String startTime,
+            String endTime) {
+        List<Order> orders = mapper.getList(orderNumber, status, startTime, endTime);
         enrichOrders(orders);
+        if (StringUtils.hasText(username)) {
+            String keyword = username.trim().toLowerCase();
+            orders = orders.stream()
+                    .filter(order -> order.getUsername() != null && order.getUsername().toLowerCase().contains(keyword))
+                    .collect(Collectors.toList());
+        }
         return orders;
     }
 
