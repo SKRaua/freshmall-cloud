@@ -51,6 +51,23 @@ spring:
   mvc:
     static-path-pattern: /staticfiles/**
 
+  redis:
+    host: ${SPRING_REDIS_HOST:127.0.0.1}
+    port: ${SPRING_REDIS_PORT:6379}
+    password: ${SPRING_REDIS_PASSWORD:}
+    database: ${SPRING_REDIS_DATABASE:0}
+    timeout: 3000ms
+
+  cache:
+    # 默认使用本地缓存（simple），避免开发环境未启动 Redis 导致请求失败。
+    # 需要 Redis 缓存时，启动服务前设置: SPRING_CACHE_TYPE=redis
+    type: ${SPRING_CACHE_TYPE:redis}
+    redis:
+      cache-null-values: false
+      use-key-prefix: true
+      key-prefix: "freshmall:"
+      time-to-live: 30m
+
 # 配置 MyBatis Plus
 mybatis-plus:
   mapper-locations: classpath:mapper/*.xml

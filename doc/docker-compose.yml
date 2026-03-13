@@ -30,6 +30,27 @@ services:
         max-size: "20m"
         max-file: "5"
 
+  redis:
+    image: redis:7-alpine
+    container_name: freshmall-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
   nacos:
     image: nacos/nacos-server:v2.4.3
     container_name: freshmall-nacos
@@ -68,6 +89,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/freshmall_db?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: root
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
       FILE_UPLOADPATH: /data/upload
       TZ: Asia/Shanghai
     ports:
@@ -76,6 +99,8 @@ services:
       mysql:
         condition: service_healthy
       nacos:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     volumes:
       - upload_data:/data/upload
@@ -203,4 +228,5 @@ services:
 
 volumes:
   mysql_data:
+  redis_data:
   upload_data:

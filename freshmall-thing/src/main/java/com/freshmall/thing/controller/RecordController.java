@@ -37,7 +37,8 @@ public class RecordController {
     @RequestMapping(value = "/create", method = RequestMethod.POST)
     @Transactional
     public APIResponse create(Record record) throws IOException {
-        Thing thing = thingService.getThingById(String.valueOf(record.getThingId()));
+        // 仅校验商品是否存在，不应累计 PV
+        Thing thing = thingService.getThingByIdSimple(String.valueOf(record.getThingId()));
         if (thing != null) {
             // record.setClassificationId(thing.classificationId); //
             // 之前以为要推荐算法用，但数据库没设计这个字段，还是保持原样最安全

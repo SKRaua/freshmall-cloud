@@ -25,6 +25,22 @@ mvn -q -pl freshmall-gateway,freshmall-user,freshmall-thing,freshmall-order -am 
 docker compose -f doc/docker-compose.yml up -d --build
 ```
 
+## 1.1 单独部署中间件（MySQL + Redis）
+
+```bash
+cd /home/skraua/work/freshmall-cloud
+bash doc/scripts/deploy_middleware.sh
+# 或使用快捷脚本
+bash doc/sh-middleware
+```
+
+说明：
+- 使用文件：`doc/docker-compose.middleware.yml`
+- 仅部署 MySQL 与 Redis，不启动业务服务
+- 可重复执行，结果保持一致（幂等）：
+  - 复用固定容器名与命名卷
+  - 已存在的数据卷不会被重新初始化
+
 ## 2. 数据库初始化合并
 - 已合并文件：`doc/sql/000_merged_init.sql`
 - Compose 已挂载至 MySQL 初始化目录：`/docker-entrypoint-initdb.d/000_merged_init.sql`

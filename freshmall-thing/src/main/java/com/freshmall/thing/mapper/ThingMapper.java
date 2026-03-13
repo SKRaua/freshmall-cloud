@@ -11,4 +11,7 @@ public interface ThingMapper extends BaseMapper<Thing> {
 
     @Update("UPDATE b_thing SET repertory = repertory - #{count} WHERE id = #{thingId} AND repertory >= #{count}")
     int deductStock(@Param("thingId") String thingId, @Param("count") int count);
+
+    @Update("UPDATE b_thing SET pv = CAST(COALESCE(NULLIF(pv, ''), '0') AS UNSIGNED) + 1 WHERE id = #{thingId}")
+    int increasePv(@Param("thingId") String thingId);
 }

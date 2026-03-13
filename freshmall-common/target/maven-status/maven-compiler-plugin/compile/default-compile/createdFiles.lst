@@ -4,9 +4,9 @@ com/freshmall/common/entity/RecEntity.class
 com/freshmall/common/entity/Order.class
 com/freshmall/common/entity/ErrorLog.class
 com/freshmall/common/entity/UserCF.class
-com/freshmall/common/utils/HttpContextUtils.class
 com/freshmall/common/entity/ThingWish.class
 com/freshmall/common/entity/Cart.class
+com/freshmall/common/utils/HttpContextUtils.class
 com/freshmall/common/utils/IpUtils.class
 com/freshmall/common/entity/VisitData.class
 com/freshmall/common/entity/Record.class

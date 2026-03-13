@@ -10,6 +10,7 @@
 /home/skraua/work/freshmall-cloud/freshmall-common/src/main/java/com/freshmall/common/entity/UserCF.java
 /home/skraua/work/freshmall-cloud/freshmall-common/src/main/java/com/freshmall/common/entity/VisitData.java
 /home/skraua/work/freshmall-cloud/freshmall-common/src/main/java/com/freshmall/common/entity/Record.java
+/home/skraua/work/freshmall-cloud/freshmall-common/src/main/java/com/freshmall/common/config/CommonCacheConfig.java
 /home/skraua/work/freshmall-cloud/freshmall-common/src/main/java/com/freshmall/common/entity/Cart.java
 /home/skraua/work/freshmall-cloud/freshmall-common/src/main/java/com/freshmall/common/entity/ThingCollect.java
 /home/skraua/work/freshmall-cloud/freshmall-common/src/main/java/com/freshmall/common/entity/Classification.java

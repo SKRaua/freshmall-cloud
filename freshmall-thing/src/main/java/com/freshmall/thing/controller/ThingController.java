@@ -52,6 +52,9 @@ public class ThingController {
     @RequestMapping(value = "/detail", method = RequestMethod.GET)
     public APIResponse detail(HttpServletRequest request, String id) {
         Thing thing = service.getThingById(id);
+        if (thing == null) {
+            return new APIResponse(ResponseCode.FAIL, "商品不存在");
+        }
 
         // ------------------保存浏览记录--------------------
         String ip = IpUtils.getIpAddr(request);
@@ -153,7 +156,11 @@ public class ThingController {
     @RequestMapping(value = "/rate", method = RequestMethod.POST)
     @Transactional
     public APIResponse rate(String thingId, int rate) throws IOException {
-        Thing thing = service.getThingById(thingId);
+        // 评分场景不应增加浏览量，走不计 PV 的读取方法
+        Thing thing = service.getThingByIdSimple(thingId);
+        if (thing == null) {
+            return new APIResponse(ResponseCode.FAIL, "商品不存在");
+        }
         thing.rate = String.valueOf((Integer.parseInt(thing.rate) + rate) / 2);
         service.updateThing(thing);
         return new APIResponse(ResponseCode.SUCCESS, "成功");
@@ -179,13 +186,6 @@ public class ThingController {
             thing.cover = newFileName;
         }
         return newFileName;
-    }
-
-    @RequestMapping(value = "/listUserThing", method = RequestMethod.GET)
-    public APIResponse listUserThing(String userId) {
-        List<Thing> list = service.getUserThing(userId);
-
-        return new APIResponse(ResponseCode.SUCCESS, "查询成功", list);
     }
 
     // ===== 内部 Feign 接口（供其他微服务调用） =====
