@@ -1,19 +1,20 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-docker run -d \
---name nacos-server \
---network host \
--e MODE=standalone \
--e SPRING_DATASOURCE_PLATFORM=derby \
-nacos/nacos-server:v2.4.3
+ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
+COMPOSE_FILE="$ROOT_DIR/doc/docker-compose.yml"
 
+echo "[1/4] 构建后端 JAR..."
+cd "$ROOT_DIR"
+mvn -q -pl freshmall-gateway,freshmall-user,freshmall-thing,freshmall-order -am package -DskipTests
 
-docker run -d \
---name mysql-server \
---network host \
--e MYSQL_ROOT_PASSWORD=root \
--e MYSQL_DATABASE=freshmall_db \
-mysql:8.0 \
---character-set-server=utf8mb4 \
---collation-server=utf8mb4_unicode_ci \
---default-time-zone=+08:00
+echo "[2/4] 构建本地镜像..."
+docker compose -f "$COMPOSE_FILE" build
+
+echo "[3/4] 启动服务..."
+docker compose -f "$COMPOSE_FILE" up -d
+
+echo "[4/4] 健康巡检..."
+"$ROOT_DIR/doc/scripts/compose_health_audit.sh"
+
+echo "[OK] 启动完成，网关地址: http://localhost:9100"

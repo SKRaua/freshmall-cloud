@@ -1,0 +1,31 @@
+---
+- name: Freshmall 一键部署（Docker Compose）
+  hosts: freshmall
+  become: false
+  vars:
+    project_root: "/home/skraua/work/freshmall-cloud"
+    compose_file: "{{ project_root }}/doc/docker-compose.yml"
+  tasks:
+    - name: 检查 docker 可用
+      ansible.builtin.command: docker version
+      changed_when: false
+
+    - name: 构建后端 JAR
+      ansible.builtin.command: mvn -q -pl freshmall-gateway,freshmall-user,freshmall-thing,freshmall-order -am package -DskipTests
+      args:
+        chdir: "{{ project_root }}"
+
+    - name: 构建本地镜像
+      ansible.builtin.command: docker compose -f {{ compose_file }} build
+      args:
+        chdir: "{{ project_root }}"
+
+    - name: 启动服务
+      ansible.builtin.command: docker compose -f {{ compose_file }} up -d
+      args:
+        chdir: "{{ project_root }}"
+
+    - name: 执行健康巡检
+      ansible.builtin.command: ./doc/scripts/compose_health_audit.sh
+      args:
+        chdir: "{{ project_root }}"

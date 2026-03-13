@@ -1,6 +1,5 @@
 package com.freshmall.order.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.freshmall.common.APIResponse;
 import com.freshmall.common.ResponseCode;
 import com.freshmall.common.entity.Cart;
@@ -120,22 +119,36 @@ public class CartServiceImpl implements CartService {
 
         fillThingInfo(carts);
 
+        Map<String, Integer> thingCountMap = new HashMap<>();
+        for (Cart cart : carts) {
+            thingCountMap.merge(cart.getThingId(), cart.getCount(), Integer::sum);
+        }
+
+        Map<String, Thing> thingMap = new HashMap<>();
+        for (Map.Entry<String, Integer> entry : thingCountMap.entrySet()) {
+            String thingId = entry.getKey();
+            Integer totalCount = entry.getValue();
+
+            Thing thing = thingFeignClient.getThingById(thingId);
+            if (thing == null) {
+                throw new IllegalArgumentException("存在已下架商品");
+            }
+            if (totalCount > thing.getRepertory()) {
+                throw new IllegalArgumentException("商品库存不足: " + thing.getTitle());
+            }
+
+            APIResponse<?> stockResp = thingFeignClient.deductStock(thingId, totalCount);
+            if (stockResp == null || stockResp.getCode() != ResponseCode.SUCCESS.getCode()) {
+                throw new IllegalArgumentException("扣减库存失败: " + thing.getTitle());
+            }
+            thingMap.put(thingId, thing);
+        }
+
         BigDecimal totalAmount = BigDecimal.ZERO;
         int orderCount = 0;
 
         for (Cart cart : carts) {
-            Thing thing = thingFeignClient.getThingById(cart.getThingId());
-            if (thing == null) {
-                throw new IllegalArgumentException("存在已下架商品");
-            }
-            if (cart.getCount() > thing.getRepertory()) {
-                throw new IllegalArgumentException("商品库存不足: " + thing.getTitle());
-            }
-
-            APIResponse stockResp = thingFeignClient.deductStock(cart.getThingId(), cart.getCount());
-            if (stockResp == null || stockResp.getCode() != ResponseCode.SUCCESS.getCode()) {
-                throw new IllegalArgumentException("扣减库存失败: " + thing.getTitle());
-            }
+            Thing thing = thingMap.get(cart.getThingId());
 
             Order order = new Order();
             order.setUserId(userId);
@@ -150,9 +163,9 @@ public class CartServiceImpl implements CartService {
 
             BigDecimal price = new BigDecimal(thing.getPrice());
             totalAmount = totalAmount.add(price.multiply(BigDecimal.valueOf(cart.getCount())));
-
-            cartMapper.deleteById(cart.getId());
         }
+
+        cartMapper.deleteBatchIds(selectedIds);
 
         Map<String, Object> result = new HashMap<>();
         result.put("orderCount", orderCount);

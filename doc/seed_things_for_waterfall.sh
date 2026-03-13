@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 用途：批量插入测试商品（用于瀑布流/无限滚动验证）
-# 默认：插入 24 条，标题前缀为 [瀑布流测试]
+# 用途：批量插入测试商品
+# 默认：插入 24 条
 # 依赖：本机可执行 mysql 命令，且可访问 freshmall_db
 #
 # 用法：
@@ -13,7 +13,7 @@ set -euo pipefail
 #   bash doc/seed_things_for_waterfall.sh --host 127.0.0.1 --port 3306 --user root --password root
 
 COUNT=24
-PREFIX="[瀑布流测试]"
+PREFIX="[新疆]"
 DB_HOST="127.0.0.1"
 DB_PORT="3306"
 DB_USER="root"

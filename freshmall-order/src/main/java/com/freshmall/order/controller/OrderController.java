@@ -9,10 +9,13 @@ import com.freshmall.order.service.OrderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.StringUtils;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
+
+import javax.servlet.http.HttpServletRequest;
 
 import java.io.IOException;
 import java.util.List;
@@ -98,7 +101,16 @@ public class OrderController {
      * 管理员：删除订单
      */
     @RequestMapping(value = "/delete", method = RequestMethod.POST)
-    public APIResponse delete(String ids) {
+    public APIResponse delete(String ids, HttpServletRequest request) {
+        String adminToken = request.getHeader("ADMINTOKEN");
+        if (!StringUtils.hasText(adminToken)) {
+            return new APIResponse(ResponseCode.FAIL, "无权限删除订单");
+        }
+
+        if (!StringUtils.hasText(ids)) {
+            return new APIResponse(ResponseCode.FAIL, "订单ID不能为空");
+        }
+
         String[] arr = ids.split(",");
         for (String id : arr) {
             service.deleteOrder(id);
@@ -124,7 +136,7 @@ public class OrderController {
     public APIResponse cancelOrder(Long id) throws IOException {
         Order order = new Order();
         order.setId(id);
-        order.setStatus("7"); // 7=取消
+        order.setStatus("0"); // 0=已取消
         service.updateOrder(order);
         return new APIResponse(ResponseCode.SUCCESS, "取消成功");
     }
@@ -134,11 +146,29 @@ public class OrderController {
      */
     @RequestMapping(value = "/cancelUserOrder", method = RequestMethod.POST)
     @Transactional
-    public APIResponse cancelUserOrder(Long id) throws IOException {
+    public APIResponse cancelUserOrder(Long id, String userId) throws IOException {
+        // if (id == null || !StringUtils.hasText(userId)) {
+        // return new APIResponse(ResponseCode.FAIL, "参数错误");
+        // }
+
+        // Order dbOrder = service.getById(id);
+        // if (dbOrder == null) {
+        // return new APIResponse(ResponseCode.FAIL, "订单不存在");
+        // }
+
+        // if (!userId.equals(dbOrder.getUserId())) {
+        // return new APIResponse(ResponseCode.FAIL, "无权限取消该订单");
+        // }
+        // // 仅允许用户取消待发货订单
+        // if (!"1".equals(dbOrder.getStatus())) {
+        // return new APIResponse(ResponseCode.FAIL, "当前订单状态不可取消");
+        // }
+
         Order order = new Order();
         order.setId(id);
-        order.setStatus("7"); // 7=取消
+        order.setStatus("0"); // 0=已取消
         service.updateOrder(order);
         return new APIResponse(ResponseCode.SUCCESS, "取消成功");
+
     }
 }

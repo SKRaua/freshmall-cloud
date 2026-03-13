@@ -130,12 +130,9 @@ public class ThingServiceImpl extends ServiceImpl<ThingMapper, Thing> implements
 
     @Override
     public boolean deductStock(String thingId, int count) {
-        Thing thing = mapper.selectById(thingId);
-        if (thing == null || thing.getRepertory() < count) {
+        if (count <= 0) {
             return false;
         }
-        thing.setRepertory(thing.getRepertory() - count);
-        mapper.updateById(thing);
-        return true;
+        return mapper.deductStock(thingId, count) > 0;
     }
 }
