@@ -210,4 +210,40 @@ public class ThingController {
             return new APIResponse(ResponseCode.FAIL, "库存不足");
         }
     }
+
+    @RequestMapping(value = "/inner/reserveStock", method = RequestMethod.POST)
+    public APIResponse reserveStock(@RequestParam String thingId, @RequestParam int count) {
+        boolean success = service.reserveStock(thingId, count);
+        if (success) {
+            return new APIResponse(ResponseCode.SUCCESS, "预占成功");
+        }
+        return new APIResponse(ResponseCode.FAIL, "库存不足");
+    }
+
+    @RequestMapping(value = "/inner/confirmDeductStock", method = RequestMethod.POST)
+    public APIResponse confirmDeductStock(@RequestParam String thingId, @RequestParam int count) {
+        boolean success = service.confirmDeductStock(thingId, count);
+        if (success) {
+            return new APIResponse(ResponseCode.SUCCESS, "正式扣减成功");
+        }
+        return new APIResponse(ResponseCode.FAIL, "正式扣减失败");
+    }
+
+    @RequestMapping(value = "/inner/releaseStock", method = RequestMethod.POST)
+    public APIResponse releaseStock(@RequestParam String thingId, @RequestParam int count) {
+        boolean success = service.releaseStock(thingId, count);
+        if (success) {
+            return new APIResponse(ResponseCode.SUCCESS, "回补成功");
+        }
+        return new APIResponse(ResponseCode.FAIL, "回补失败");
+    }
+
+    @RequestMapping(value = "/inner/unreserveStock", method = RequestMethod.POST)
+    public APIResponse unreserveStock(@RequestParam String thingId, @RequestParam int count) {
+        boolean success = service.unreserveStock(thingId, count);
+        if (success) {
+            return new APIResponse(ResponseCode.SUCCESS, "回滚预占成功");
+        }
+        return new APIResponse(ResponseCode.FAIL, "回滚预占失败");
+    }
 }

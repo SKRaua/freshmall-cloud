@@ -3,14 +3,11 @@ package com.freshmall.order.controller;
 import com.freshmall.common.APIResponse;
 import com.freshmall.common.ResponseCode;
 import com.freshmall.common.entity.Order;
-import com.freshmall.common.entity.Thing;
-import com.freshmall.order.feign.ThingFeignClient;
 import com.freshmall.order.service.OrderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,7 +15,9 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.servlet.http.HttpServletRequest;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/order")
@@ -28,9 +27,6 @@ public class OrderController {
 
     @Autowired
     OrderService service;
-
-    @Autowired
-    ThingFeignClient thingFeignClient;
 
     // ============================= 查询接口 =============================
 
@@ -59,40 +55,21 @@ public class OrderController {
      * 通过 Feign 调用商品服务校验库存并扣减
      */
     @RequestMapping(value = "/create", method = RequestMethod.POST)
-    @Transactional
     public APIResponse create(Order order) throws IOException {
-        // 1. 通过 Feign 获取商品信息（校验库存）
-        Thing thing;
         try {
-            thing = thingFeignClient.getThingById(order.getThingId());
+            Order created = service.createOrder(order);
+            Map<String, Object> data = new HashMap<>();
+            data.put("orderId", created.getId());
+            data.put("orderNumber", created.getOrderNumber());
+            APIResponse response = new APIResponse(ResponseCode.SUCCESS, "创建成功");
+            response.setData(data);
+            return response;
+        } catch (IllegalArgumentException e) {
+            return new APIResponse(ResponseCode.FAIL, e.getMessage());
         } catch (Exception e) {
-            logger.error("获取商品信息失败: {}", e.getMessage());
-            return new APIResponse(ResponseCode.FAIL, "获取商品信息失败");
+            logger.error("创建订单失败", e);
+            return new APIResponse(ResponseCode.FAIL, "创建失败");
         }
-
-        if (thing == null) {
-            return new APIResponse(ResponseCode.FAIL, "商品不存在");
-        }
-
-        int count = Integer.parseInt(order.getCount());
-        if (count > thing.getRepertory()) {
-            return new APIResponse(ResponseCode.FAIL, "库存不足");
-        }
-
-        // 2. 通过 Feign 扣减库存
-        try {
-            APIResponse stockResp = thingFeignClient.deductStock(order.getThingId(), count);
-            if (stockResp.getCode() != ResponseCode.SUCCESS.getCode()) {
-                return new APIResponse(ResponseCode.FAIL, "扣减库存失败");
-            }
-        } catch (Exception e) {
-            logger.error("扣减库存失败: {}", e.getMessage());
-            return new APIResponse(ResponseCode.FAIL, "扣减库存失败");
-        }
-
-        // 3. 创建订单记录
-        service.createOrder(order);
-        return new APIResponse(ResponseCode.SUCCESS, "创建成功");
     }
 
     // ============================= 管理接口 =============================
@@ -122,7 +99,6 @@ public class OrderController {
      * 更新订单
      */
     @RequestMapping(value = "/update", method = RequestMethod.POST)
-    @Transactional
     public APIResponse update(Order order) throws IOException {
         service.updateOrder(order);
         return new APIResponse(ResponseCode.SUCCESS, "更新成功");
@@ -132,12 +108,11 @@ public class OrderController {
      * 管理员：取消订单
      */
     @RequestMapping(value = "/cancelOrder", method = RequestMethod.POST)
-    @Transactional
     public APIResponse cancelOrder(Long id) throws IOException {
-        Order order = new Order();
-        order.setId(id);
-        order.setStatus("0"); // 0=已取消
-        service.updateOrder(order);
+        boolean success = service.cancelOrderByAdmin(id);
+        if (!success) {
+            return new APIResponse(ResponseCode.FAIL, "取消失败");
+        }
         return new APIResponse(ResponseCode.SUCCESS, "取消成功");
     }
 
@@ -145,29 +120,11 @@ public class OrderController {
      * 用户：取消自己的订单
      */
     @RequestMapping(value = "/cancelUserOrder", method = RequestMethod.POST)
-    @Transactional
     public APIResponse cancelUserOrder(Long id, String userId) throws IOException {
-        // if (id == null || !StringUtils.hasText(userId)) {
-        // return new APIResponse(ResponseCode.FAIL, "参数错误");
-        // }
-
-        // Order dbOrder = service.getById(id);
-        // if (dbOrder == null) {
-        // return new APIResponse(ResponseCode.FAIL, "订单不存在");
-        // }
-
-        // if (!userId.equals(dbOrder.getUserId())) {
-        // return new APIResponse(ResponseCode.FAIL, "无权限取消该订单");
-        // }
-        // // 仅允许用户取消待发货订单
-        // if (!"1".equals(dbOrder.getStatus())) {
-        // return new APIResponse(ResponseCode.FAIL, "当前订单状态不可取消");
-        // }
-
-        Order order = new Order();
-        order.setId(id);
-        order.setStatus("0"); // 0=已取消
-        service.updateOrder(order);
+        boolean success = service.cancelOrderByUser(id, userId);
+        if (!success) {
+            return new APIResponse(ResponseCode.FAIL, "取消失败");
+        }
         return new APIResponse(ResponseCode.SUCCESS, "取消成功");
 
     }

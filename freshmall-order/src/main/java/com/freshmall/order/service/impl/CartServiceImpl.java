@@ -1,7 +1,5 @@
 package com.freshmall.order.service.impl;
 
-import com.freshmall.common.APIResponse;
-import com.freshmall.common.ResponseCode;
 import com.freshmall.common.entity.Cart;
 import com.freshmall.common.entity.Order;
 import com.freshmall.common.entity.Thing;
@@ -119,33 +117,21 @@ public class CartServiceImpl implements CartService {
 
         fillThingInfo(carts);
 
-        Map<String, Integer> thingCountMap = new HashMap<>();
-        for (Cart cart : carts) {
-            thingCountMap.merge(cart.getThingId(), cart.getCount(), Integer::sum);
-        }
-
         Map<String, Thing> thingMap = new HashMap<>();
-        for (Map.Entry<String, Integer> entry : thingCountMap.entrySet()) {
-            String thingId = entry.getKey();
-            Integer totalCount = entry.getValue();
-
-            Thing thing = thingFeignClient.getThingById(thingId);
+        for (Cart cart : carts) {
+            Thing thing = thingFeignClient.getThingById(cart.getThingId());
             if (thing == null) {
                 throw new IllegalArgumentException("存在已下架商品");
             }
-            if (totalCount > thing.getRepertory()) {
+            if (cart.getCount() > thing.getRepertory()) {
                 throw new IllegalArgumentException("商品库存不足: " + thing.getTitle());
             }
-
-            APIResponse<?> stockResp = thingFeignClient.deductStock(thingId, totalCount);
-            if (stockResp == null || stockResp.getCode() != ResponseCode.SUCCESS.getCode()) {
-                throw new IllegalArgumentException("扣减库存失败: " + thing.getTitle());
-            }
-            thingMap.put(thingId, thing);
+            thingMap.put(cart.getThingId(), thing);
         }
 
         BigDecimal totalAmount = BigDecimal.ZERO;
         int orderCount = 0;
+        List<Long> orderIds = new java.util.ArrayList<>();
 
         for (Cart cart : carts) {
             Thing thing = thingMap.get(cart.getThingId());
@@ -158,7 +144,10 @@ public class CartServiceImpl implements CartService {
             order.setReceiverPhone(receiverPhone);
             order.setReceiverAddress(receiverAddress);
             order.setRemark(remark);
-            orderService.createOrder(order);
+            Order createdOrder = orderService.createOrder(order);
+            if (createdOrder != null && createdOrder.getId() != null) {
+                orderIds.add(createdOrder.getId());
+            }
             orderCount++;
 
             BigDecimal price = new BigDecimal(thing.getPrice());
@@ -171,6 +160,8 @@ public class CartServiceImpl implements CartService {
         result.put("orderCount", orderCount);
         result.put("totalAmount", totalAmount);
         result.put("cartIds", selectedIds);
+        result.put("orderIds", orderIds);
+        result.put("firstOrderId", orderIds.isEmpty() ? null : orderIds.get(0));
         return result;
     }
 

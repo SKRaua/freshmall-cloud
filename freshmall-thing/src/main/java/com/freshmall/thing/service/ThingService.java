@@ -66,4 +66,24 @@ public interface ThingService {
      * @return true=成功，false=库存不足
      */
     boolean deductStock(String thingId, int count);
+
+    /**
+     * 在缓存层预占库存。
+     */
+    boolean reserveStock(String thingId, int count);
+
+    /**
+     * 将已预占库存正式扣减到数据库。
+     */
+    boolean confirmDeductStock(String thingId, int count);
+
+    /**
+     * 释放库存（缓存 + 数据库回补）。
+     */
+    boolean releaseStock(String thingId, int count);
+
+    /**
+     * 回滚预占库存（仅缓存层）。
+     */
+    boolean unreserveStock(String thingId, int count);
 }

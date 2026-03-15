@@ -13,7 +13,11 @@ import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
+
+import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -27,6 +31,18 @@ public class ThingServiceImpl extends ServiceImpl<ThingMapper, Thing> implements
     @Lazy
     // 通过代理调用自身带缓存注解的方法，避免 this.方法() 导致注解失效
     private ThingService self;
+
+    @Autowired(required = false)
+    private StringRedisTemplate stringRedisTemplate;
+
+    private static final String STOCK_KEY_PREFIX = "freshmall:stock:thing:";
+
+    private static final DefaultRedisScript<Long> RESERVE_STOCK_SCRIPT = new DefaultRedisScript<>(
+            "local v = redis.call('GET', KEYS[1]);"
+                    + "if (not v) then return -2 end;"
+                    + "if (tonumber(v) < tonumber(ARGV[1])) then return -1 end;"
+                    + "return redis.call('DECRBY', KEYS[1], ARGV[1]);",
+            Long.class);
 
     @Override
     // 列表接口：用于首页/搜索页，支持关键字+排序+分类组合筛选。
@@ -186,6 +202,83 @@ public class ThingServiceImpl extends ServiceImpl<ThingMapper, Thing> implements
         }
 
         return mapper.deductStock(thingId, count) > 0;
+    }
+
+    @Override
+    public boolean reserveStock(String thingId, int count) {
+        if (count <= 0 || thingId == null || thingId.trim().isEmpty()) {
+            return false;
+        }
+        if (stringRedisTemplate == null) {
+            Thing thing = mapper.selectById(thingId);
+            return thing != null && thing.getRepertory() >= count;
+        }
+
+        initStockCacheIfAbsent(thingId);
+        String key = buildStockKey(thingId);
+        Long result = stringRedisTemplate.execute(RESERVE_STOCK_SCRIPT, Collections.singletonList(key),
+                String.valueOf(count));
+        return result != null && result >= 0;
+    }
+
+    @Override
+    @CacheEvict(key = "#thingId", condition = "#thingId != null && !#thingId.trim().isEmpty()")
+    public boolean confirmDeductStock(String thingId, int count) {
+        if (count <= 0 || thingId == null || thingId.trim().isEmpty()) {
+            return false;
+        }
+        boolean success = mapper.deductStock(thingId, count) > 0;
+        if (!success && stringRedisTemplate != null) {
+            // 缓存已预占但 DB 扣减失败时，进行补偿回补。
+            stringRedisTemplate.opsForValue().increment(buildStockKey(thingId), count);
+        }
+        return success;
+    }
+
+    @Override
+    @CacheEvict(key = "#thingId", condition = "#thingId != null && !#thingId.trim().isEmpty()")
+    public boolean releaseStock(String thingId, int count) {
+        if (count <= 0 || thingId == null || thingId.trim().isEmpty()) {
+            return false;
+        }
+        if (stringRedisTemplate != null) {
+            initStockCacheIfAbsent(thingId);
+            stringRedisTemplate.opsForValue().increment(buildStockKey(thingId), count);
+        }
+        return mapper.increaseStock(thingId, count) > 0;
+    }
+
+    @Override
+    public boolean unreserveStock(String thingId, int count) {
+        if (count <= 0 || thingId == null || thingId.trim().isEmpty()) {
+            return false;
+        }
+        if (stringRedisTemplate == null) {
+            return true;
+        }
+        initStockCacheIfAbsent(thingId);
+        Long value = stringRedisTemplate.opsForValue().increment(buildStockKey(thingId), count);
+        return value != null;
+    }
+
+    private void initStockCacheIfAbsent(String thingId) {
+        if (stringRedisTemplate == null) {
+            return;
+        }
+        String key = buildStockKey(thingId);
+        Boolean exists = stringRedisTemplate.hasKey(key);
+        if (Boolean.TRUE.equals(exists)) {
+            return;
+        }
+        Thing thing = mapper.selectById(thingId);
+        if (thing == null) {
+            return;
+        }
+        stringRedisTemplate.opsForValue().setIfAbsent(key, String.valueOf(Math.max(thing.getRepertory(), 0)));
+    }
+
+    private String buildStockKey(String thingId) {
+        return STOCK_KEY_PREFIX + thingId;
     }
 
     private int parseIntSafe(String value) {

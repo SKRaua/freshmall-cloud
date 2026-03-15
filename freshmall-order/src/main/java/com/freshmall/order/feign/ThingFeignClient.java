@@ -25,5 +25,21 @@ public interface ThingFeignClient {
      */
     @PostMapping("/thing/inner/deductStock")
     APIResponse deductStock(@RequestParam("thingId") String thingId,
-                            @RequestParam("count") int count);
+            @RequestParam("count") int count);
+
+    @PostMapping("/thing/inner/reserveStock")
+    APIResponse reserveStock(@RequestParam("thingId") String thingId,
+            @RequestParam("count") int count);
+
+    @PostMapping("/thing/inner/confirmDeductStock")
+    APIResponse confirmDeductStock(@RequestParam("thingId") String thingId,
+            @RequestParam("count") int count);
+
+    @PostMapping("/thing/inner/releaseStock")
+    APIResponse releaseStock(@RequestParam("thingId") String thingId,
+            @RequestParam("count") int count);
+
+    @PostMapping("/thing/inner/unreserveStock")
+    APIResponse unreserveStock(@RequestParam("thingId") String thingId,
+            @RequestParam("count") int count);
 }

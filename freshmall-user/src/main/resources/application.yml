@@ -4,20 +4,20 @@ server:
 # 自定义文件上传路?
 File:
   # uploadPath: E:/test/ncp/freshmall/server/upload/
-  uploadPath: ${user.home}/freshmall/upload
+  uploadPath: ${FILE_UPLOADPATH:${user.home}/freshmall/upload}
 spring:
   application:
     name: freshmall-user
   cloud:
     nacos:
       discovery:
-        server-addr: 127.0.0.1:8848
+        server-addr: ${SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR:127.0.0.1:8848}
 
   # 数据源配?
   datasource:
-    username: root
-    password: root
-    url: jdbc:mysql://localhost:3306/freshmall_db?useUnicode=true&characterEncoding=utf-8&useSSL=true&serverTimezone=UTC
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:root}
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/freshmall_db?useUnicode=true&characterEncoding=utf-8&useSSL=true&serverTimezone=UTC}
     driver-class-name: com.mysql.cj.jdbc.Driver
     type: com.alibaba.druid.pool.DruidDataSource
 

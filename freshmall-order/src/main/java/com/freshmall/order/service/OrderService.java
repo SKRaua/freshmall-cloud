@@ -7,7 +7,13 @@ import java.util.List;
 public interface OrderService {
     List<Order> getOrderList(String orderNumber, String username, String status, String startTime, String endTime);
 
-    void createOrder(Order order);
+    Order createOrder(Order order);
+
+    boolean cancelOrderByAdmin(Long id);
+
+    boolean cancelOrderByUser(Long id, String userId);
+
+    int closeTimeoutPendingPayOrders();
 
     void deleteOrder(String id);
 

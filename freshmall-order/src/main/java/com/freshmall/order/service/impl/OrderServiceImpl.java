@@ -1,18 +1,26 @@
 package com.freshmall.order.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.freshmall.common.APIResponse;
+import com.freshmall.common.ResponseCode;
 import com.freshmall.common.entity.Order;
 import com.freshmall.common.entity.Thing;
 import com.freshmall.common.entity.User;
+import com.freshmall.order.constant.OrderStatusConstants;
+import com.freshmall.order.event.OrderEventType;
+import com.freshmall.order.event.OrderStockEventPayload;
 import com.freshmall.order.feign.ThingFeignClient;
 import com.freshmall.order.feign.UserFeignClient;
 import com.freshmall.order.mapper.OrderMapper;
 import com.freshmall.order.service.OrderService;
+import com.freshmall.order.service.event.OrderEventService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -31,6 +39,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Autowired
     UserFeignClient userFeignClient;
 
+    @Autowired
+    OrderEventService orderEventService;
+
+    @Value("${order.timeout.pending-pay-ms:1800000}")
+    private long pendingPayTimeoutMs;
+
     @Override
     public List<Order> getOrderList(String orderNumber, String username, String status, String startTime,
             String endTime) {
@@ -46,12 +60,81 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     @Override
-    public void createOrder(Order order) {
+    @Transactional
+    public Order createOrder(Order order) {
+        validateCreateOrder(order);
+        int count = Integer.parseInt(order.getCount());
+
+        APIResponse<?> reserveResp = thingFeignClient.reserveStock(order.getThingId(), count);
+        if (reserveResp == null || reserveResp.getCode() != ResponseCode.SUCCESS.getCode()) {
+            throw new IllegalArgumentException("库存不足");
+        }
+
+        boolean needCompensation = true;
         long ct = System.currentTimeMillis();
-        order.setOrderTime(String.valueOf(ct));
-        order.setOrderNumber(String.valueOf(ct));
-        order.setStatus("1");
-        mapper.insert(order);
+        try {
+            order.setOrderTime(String.valueOf(ct));
+            order.setOrderNumber(String.valueOf(ct));
+            order.setStatus(OrderStatusConstants.PENDING_PAY);
+            mapper.insert(order);
+
+            String eventId = UUID.randomUUID().toString();
+            orderEventService.saveOutboxEvent(eventId, order.getId(), OrderEventType.ORDER_CREATED,
+                    buildPayload(eventId, order.getId(), order.getThingId(), count));
+            needCompensation = false;
+            return order;
+        } finally {
+            if (needCompensation) {
+                try {
+                    thingFeignClient.unreserveStock(order.getThingId(), count);
+                } catch (Exception ex) {
+                    logger.error("创建订单失败后回补缓存库存失败，thingId={}, count={}", order.getThingId(), count);
+                }
+            }
+        }
+    }
+
+    @Override
+    @Transactional
+    public boolean cancelOrderByAdmin(Long id) {
+        if (id == null) {
+            return false;
+        }
+        Order dbOrder = mapper.selectById(id);
+        if (dbOrder == null) {
+            return false;
+        }
+        return closeOrderAndEmitCancelEvent(dbOrder);
+    }
+
+    @Override
+    @Transactional
+    public boolean cancelOrderByUser(Long id, String userId) {
+        if (id == null || !StringUtils.hasText(userId)) {
+            return false;
+        }
+        Order dbOrder = mapper.selectById(id);
+        if (dbOrder == null || !userId.equals(dbOrder.getUserId())) {
+            return false;
+        }
+        return closeOrderAndEmitCancelEvent(dbOrder);
+    }
+
+    @Override
+    @Transactional
+    public int closeTimeoutPendingPayOrders() {
+        long deadline = System.currentTimeMillis() - pendingPayTimeoutMs;
+        List<Order> timeoutOrders = mapper.listTimeoutOrders(OrderStatusConstants.PENDING_PAY, deadline, 100);
+        int affected = 0;
+        for (Order timeoutOrder : timeoutOrders) {
+            int updated = mapper.updateStatusIfCurrent(timeoutOrder.getId(), OrderStatusConstants.PENDING_PAY,
+                    OrderStatusConstants.CANCELED);
+            if (updated > 0) {
+                affected++;
+                enqueueCancelEvent(timeoutOrder);
+            }
+        }
+        return affected;
     }
 
     @Override
@@ -130,5 +213,65 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 order.setUsername(user.getUsername());
             }
         }
+    }
+
+    private boolean closeOrderAndEmitCancelEvent(Order order) {
+        if (order == null || !StringUtils.hasText(order.getStatus())) {
+            return false;
+        }
+        if (!OrderStatusConstants.PENDING_PAY.equals(order.getStatus())
+                && !OrderStatusConstants.TO_SHIP.equals(order.getStatus())) {
+            return false;
+        }
+
+        int updated = mapper.updateStatusIfCurrent(order.getId(), order.getStatus(), OrderStatusConstants.CANCELED);
+        if (updated <= 0) {
+            return false;
+        }
+        enqueueCancelEvent(order);
+        return true;
+    }
+
+    private void enqueueCancelEvent(Order order) {
+        int count = parsePositiveInt(order.getCount(), 0);
+        if (count <= 0) {
+            logger.warn("订单数量异常，跳过取消事件。orderId={}", order.getId());
+            return;
+        }
+        String eventId = UUID.randomUUID().toString();
+        orderEventService.saveOutboxEvent(eventId, order.getId(), OrderEventType.ORDER_CANCELED,
+                buildPayload(eventId, order.getId(), order.getThingId(), count));
+    }
+
+    private void validateCreateOrder(Order order) {
+        if (order == null || !StringUtils.hasText(order.getThingId()) || !StringUtils.hasText(order.getUserId())) {
+            throw new IllegalArgumentException("参数错误");
+        }
+        int count = parsePositiveInt(order.getCount(), -1);
+        if (count <= 0) {
+            throw new IllegalArgumentException("商品数量不合法");
+        }
+
+        Thing thing = thingFeignClient.getThingById(order.getThingId());
+        if (thing == null) {
+            throw new IllegalArgumentException("商品不存在");
+        }
+    }
+
+    private int parsePositiveInt(String value, int defaultValue) {
+        try {
+            return Integer.parseInt(value);
+        } catch (Exception ex) {
+            return defaultValue;
+        }
+    }
+
+    private OrderStockEventPayload buildPayload(String eventId, Long orderId, String thingId, int count) {
+        OrderStockEventPayload payload = new OrderStockEventPayload();
+        payload.setEventId(eventId);
+        payload.setOrderId(orderId);
+        payload.setThingId(thingId);
+        payload.setCount(count);
+        return payload;
     }
 }
