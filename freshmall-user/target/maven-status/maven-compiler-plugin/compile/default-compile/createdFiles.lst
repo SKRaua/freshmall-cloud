@@ -1,5 +1,0 @@
-com/freshmall/user/UserApplication.class
-com/freshmall/user/mapper/UserMapper.class
-com/freshmall/user/service/impl/UserServiceImpl.class
-com/freshmall/user/service/UserService.class
-com/freshmall/user/controller/UserController.class
