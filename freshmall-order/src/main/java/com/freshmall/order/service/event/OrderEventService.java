@@ -2,6 +2,7 @@ package com.freshmall.order.service.event;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.freshmall.common.mq.OrderStockEventMessage;
 import com.freshmall.order.event.OrderEventOutbox;
 import com.freshmall.order.event.OrderStockEventPayload;
 import com.freshmall.order.mapper.OrderEventOutboxMapper;
@@ -38,6 +39,17 @@ public class OrderEventService {
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("解析订单事件负载失败", e);
         }
+    }
+
+    public OrderStockEventMessage buildMessage(OrderEventOutbox outbox) {
+        OrderStockEventPayload payload = parsePayload(outbox.getPayload());
+        OrderStockEventMessage message = new OrderStockEventMessage();
+        message.setEventId(payload.getEventId());
+        message.setOrderId(payload.getOrderId());
+        message.setThingId(payload.getThingId());
+        message.setCount(payload.getCount());
+        message.setEventType(outbox.getEventType());
+        return message;
     }
 
     private String toJson(Object value) {

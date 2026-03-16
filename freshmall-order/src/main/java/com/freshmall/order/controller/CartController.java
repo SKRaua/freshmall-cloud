@@ -3,6 +3,7 @@ package com.freshmall.order.controller;
 import com.freshmall.common.APIResponse;
 import com.freshmall.common.ResponseCode;
 import com.freshmall.common.entity.Cart;
+import com.freshmall.common.exception.BizException;
 import com.freshmall.order.service.CartService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,7 +25,7 @@ public class CartController {
         try {
             List<Cart> list = cartService.getUserCartList(userId);
             return new APIResponse(ResponseCode.SUCCESS, "查询成功", list);
-        } catch (IllegalArgumentException e) {
+        } catch (BizException e) {
             return new APIResponse(ResponseCode.FAIL, e.getMessage());
         }
     }
@@ -34,7 +35,7 @@ public class CartController {
         try {
             cartService.addCart(userId, thingId, count);
             return new APIResponse(ResponseCode.SUCCESS, "加入购物车成功");
-        } catch (IllegalArgumentException e) {
+        } catch (BizException e) {
             return new APIResponse(ResponseCode.FAIL, e.getMessage());
         }
     }
@@ -44,7 +45,7 @@ public class CartController {
         try {
             cartService.updateCartCount(userId, id, count);
             return new APIResponse(ResponseCode.SUCCESS, "更新成功");
-        } catch (IllegalArgumentException e) {
+        } catch (BizException e) {
             return new APIResponse(ResponseCode.FAIL, e.getMessage());
         }
     }
@@ -54,7 +55,7 @@ public class CartController {
         try {
             cartService.deleteCart(userId, id);
             return new APIResponse(ResponseCode.SUCCESS, "删除成功");
-        } catch (IllegalArgumentException e) {
+        } catch (BizException e) {
             return new APIResponse(ResponseCode.FAIL, e.getMessage());
         }
     }
@@ -68,7 +69,7 @@ public class CartController {
             APIResponse response = new APIResponse(ResponseCode.SUCCESS, "结算成功");
             response.setData(data);
             return response;
-        } catch (IllegalArgumentException e) {
+        } catch (BizException e) {
             return new APIResponse(ResponseCode.FAIL, e.getMessage());
         }
     }

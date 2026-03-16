@@ -12,18 +12,28 @@ import java.util.List;
 @Mapper
 public interface OrderMapper extends BaseMapper<Order> {
 
-    List<Order> getList(@Param("orderNumber") String orderNumber,
-            @Param("status") String status,
-            @Param("startTime") String startTime,
-            @Param("endTime") String endTime);
+        List<Order> getList(@Param("orderNumber") String orderNumber,
+                        @Param("status") String status,
+                        @Param("startTime") String startTime,
+                        @Param("endTime") String endTime);
 
-    List<Order> getUserOrderList(@Param("userId") String userId, @Param("status") String status);
+        List<Order> getUserOrderList(@Param("userId") String userId, @Param("status") String status);
 
-    @Select("SELECT * FROM b_order WHERE status = #{status} AND CAST(order_time AS UNSIGNED) <= #{deadline} ORDER BY id ASC LIMIT #{limit}")
-    List<Order> listTimeoutOrders(@Param("status") String status, @Param("deadline") long deadline,
-            @Param("limit") int limit);
+        @Select("SELECT * FROM b_order WHERE status = #{status} AND CAST(order_time AS UNSIGNED) <= #{deadline} ORDER BY id ASC LIMIT #{limit}")
+        List<Order> listTimeoutOrders(@Param("status") String status, @Param("deadline") long deadline,
+                        @Param("limit") int limit);
 
-    @Update("UPDATE b_order SET status=#{newStatus} WHERE id=#{id} AND status=#{currentStatus}")
-    int updateStatusIfCurrent(@Param("id") Long id, @Param("currentStatus") String currentStatus,
-            @Param("newStatus") String newStatus);
+        @Update("UPDATE b_order SET status=#{newStatus} WHERE id=#{id} AND status=#{currentStatus}")
+        int updateStatusIfCurrent(@Param("id") Long id, @Param("currentStatus") String currentStatus,
+                        @Param("newStatus") String newStatus);
+
+        List<Order> listByPaymentNoAndStatus(@Param("paymentNo") String paymentNo,
+                        @Param("status") String status,
+                        @Param("userId") String userId);
+
+        int payByPaymentNo(@Param("paymentNo") String paymentNo,
+                        @Param("currentStatus") String currentStatus,
+                        @Param("newStatus") String newStatus,
+                        @Param("payTime") String payTime,
+                        @Param("userId") String userId);
 }

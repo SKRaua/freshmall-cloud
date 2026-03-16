@@ -15,6 +15,9 @@ public interface OrderEventOutboxMapper extends BaseMapper<OrderEventOutbox> {
     @Select("SELECT * FROM b_order_event_outbox WHERE status IN ('NEW','RETRY') AND next_retry_time <= #{now} ORDER BY id ASC LIMIT #{limit}")
     List<OrderEventOutbox> listDispatchable(@Param("now") long now, @Param("limit") int limit);
 
+    @Select("SELECT * FROM b_order_event_outbox WHERE status='DEAD' ORDER BY id ASC LIMIT #{limit}")
+    List<OrderEventOutbox> listDead(@Param("limit") int limit);
+
     @Update("UPDATE b_order_event_outbox SET status='PROCESSING', update_time=#{now} WHERE id=#{id} AND status IN ('NEW','RETRY')")
     int markProcessing(@Param("id") Long id, @Param("now") long now);
 
@@ -23,4 +26,10 @@ public interface OrderEventOutboxMapper extends BaseMapper<OrderEventOutbox> {
 
     @Update("UPDATE b_order_event_outbox SET status='RETRY', retry_count=retry_count+1, next_retry_time=#{nextRetryTime}, update_time=#{now} WHERE id=#{id}")
     int markRetry(@Param("id") Long id, @Param("nextRetryTime") long nextRetryTime, @Param("now") long now);
+
+    @Update("UPDATE b_order_event_outbox SET status='DEAD', retry_count=retry_count+1, update_time=#{now} WHERE id=#{id}")
+    int markDead(@Param("id") Long id, @Param("now") long now);
+
+    @Update("UPDATE b_order_event_outbox SET status='NEW', next_retry_time=#{now}, update_time=#{now} WHERE id=#{id} AND status='DEAD'")
+    int replayDead(@Param("id") Long id, @Param("now") long now);
 }

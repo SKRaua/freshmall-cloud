@@ -13,7 +13,9 @@ import java.util.List;
 @Data
 @TableName("b_thing")
 public class Thing implements Serializable {
-    @TableId(value = "id",type = IdType.AUTO)
+    private static final long serialVersionUID = 1L;
+
+    @TableId(value = "id", type = IdType.AUTO)
     public Long id;
     @TableField
     public String title;
@@ -32,7 +34,7 @@ public class Thing implements Serializable {
     @TableField
     public String pinzhong; // 品种
     @TableField
-    public String baozhiqi;  // 保质期
+    public String baozhiqi; // 保质期
     @TableField
     public String shengchanriqi;
     @TableField
@@ -46,7 +48,7 @@ public class Thing implements Serializable {
     @TableField
     public String wishCount; // 点赞数
     @TableField
-    public String collectCount;  // 收藏数
+    public String collectCount; // 收藏数
     @TableField
     public Long classificationId;
 
@@ -54,7 +56,7 @@ public class Thing implements Serializable {
     public List<Long> tags; // 标签
 
     @TableField(exist = false)
-    public MultipartFile imageFile;
+    public transient MultipartFile imageFile;
 
     @TableField
     public String userId;

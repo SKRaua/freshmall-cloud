@@ -3,6 +3,7 @@ package com.freshmall.order.controller;
 import com.freshmall.common.APIResponse;
 import com.freshmall.common.ResponseCode;
 import com.freshmall.common.entity.Order;
+import com.freshmall.common.exception.BizException;
 import com.freshmall.order.service.OrderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,14 +62,54 @@ public class OrderController {
             Map<String, Object> data = new HashMap<>();
             data.put("orderId", created.getId());
             data.put("orderNumber", created.getOrderNumber());
+            data.put("paymentNo", created.getPaymentNo());
             APIResponse response = new APIResponse(ResponseCode.SUCCESS, "创建成功");
             response.setData(data);
             return response;
-        } catch (IllegalArgumentException e) {
+        } catch (BizException e) {
             return new APIResponse(ResponseCode.FAIL, e.getMessage());
         } catch (Exception e) {
             logger.error("创建订单失败", e);
             return new APIResponse(ResponseCode.FAIL, "创建失败");
+        }
+    }
+
+    /**
+     * 统一下单接口：
+     * mode=direct 时使用 thingId/count；mode=cart 时使用 cartIds。
+     */
+    @RequestMapping(value = "/submit", method = RequestMethod.POST)
+    public APIResponse submit(String mode, String userId, String thingId, Integer count, String cartIds,
+            String receiverName, String receiverPhone, String receiverAddress, String remark) {
+        try {
+            Map<String, Object> data = service.submitOrder(mode, userId, thingId, count, cartIds, receiverName,
+                    receiverPhone, receiverAddress, remark);
+            APIResponse response = new APIResponse(ResponseCode.SUCCESS, "下单成功");
+            response.setData(data);
+            return response;
+        } catch (BizException e) {
+            return new APIResponse(ResponseCode.FAIL, e.getMessage());
+        } catch (Exception e) {
+            logger.error("统一下单失败", e);
+            return new APIResponse(ResponseCode.FAIL, "下单失败");
+        }
+    }
+
+    /**
+     * 按聚合支付单号完成批量支付。
+     */
+    @RequestMapping(value = "/payByPaymentNo", method = RequestMethod.POST)
+    public APIResponse payByPaymentNo(String paymentNo, String userId) {
+        try {
+            Map<String, Object> data = service.payByPaymentNo(paymentNo, userId);
+            APIResponse response = new APIResponse(ResponseCode.SUCCESS, "支付成功");
+            response.setData(data);
+            return response;
+        } catch (BizException e) {
+            return new APIResponse(ResponseCode.FAIL, e.getMessage());
+        } catch (Exception e) {
+            logger.error("聚合支付失败", e);
+            return new APIResponse(ResponseCode.FAIL, "支付失败");
         }
     }
 

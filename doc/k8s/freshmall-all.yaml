@@ -102,15 +102,25 @@ spec:
             - name: mysql-data
               mountPath: /var/lib/mysql
           readinessProbe:
-            tcpSocket:
-              port: 3306
+            exec:
+              command:
+                - sh
+                - -c
+                - mysqladmin ping -h 127.0.0.1 -uroot -p"$MYSQL_ROOT_PASSWORD" --silent
             initialDelaySeconds: 20
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
           livenessProbe:
-            tcpSocket:
-              port: 3306
+            exec:
+              command:
+                - sh
+                - -c
+                - mysqladmin ping -h 127.0.0.1 -uroot -p"$MYSQL_ROOT_PASSWORD" --silent
             initialDelaySeconds: 40
             periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
       volumes:
         - name: mysql-data
           persistentVolumeClaim:
@@ -404,6 +414,22 @@ spec:
               value: ""
             - name: SPRING_REDIS_DATABASE
               value: "0"
+            - name: SPRING_RABBITMQ_HOST
+              value: rabbitmq
+            - name: SPRING_RABBITMQ_PORT
+              value: "5672"
+            - name: SPRING_RABBITMQ_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: username
+            - name: SPRING_RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: password
+            - name: SPRING_RABBITMQ_VIRTUAL_HOST
+              value: /
           volumeMounts:
             - name: upload-data
               mountPath: /data/upload

@@ -13,10 +13,10 @@
             and status = #{status}
         </if>
         <if test="startTime != null and startTime != ''">
-            and order_time                         <![CDATA[ >= ]]> #{startTime}
+            and order_time                                     <![CDATA[ >= ]]> #{startTime}
         </if>
         <if test="endTime != null and endTime != ''">
-            and order_time                         <![CDATA[ <= ]]> #{endTime}
+            and order_time                                     <![CDATA[ <= ]]> #{endTime}
         </if>
         order by order_time desc
     </select>
@@ -33,5 +33,26 @@
         </if>
         order by order_time desc
     </select>
+
+    <select id="listByPaymentNoAndStatus" resultType="com.freshmall.common.entity.Order">
+                select * from b_order
+                where payment_no = #{paymentNo}
+                    and status = #{status}
+        <if test="userId != null and userId != ''">
+                    and user_id = #{userId}
+        </if>
+                order by id asc
+    </select>
+
+    <update id="payByPaymentNo">
+                update b_order
+                set status = #{newStatus},
+                        pay_time = #{payTime}
+                where payment_no = #{paymentNo}
+                    and status = #{currentStatus}
+        <if test="userId != null and userId != ''">
+                    and user_id = #{userId}
+        </if>
+    </update>
 
 </mapper>

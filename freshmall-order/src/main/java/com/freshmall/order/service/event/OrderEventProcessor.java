@@ -2,6 +2,7 @@ package com.freshmall.order.service.event;
 
 import com.freshmall.common.APIResponse;
 import com.freshmall.common.ResponseCode;
+import com.freshmall.common.exception.BizException;
 import com.freshmall.order.event.OrderEventOutbox;
 import com.freshmall.order.event.OrderEventProcessLog;
 import com.freshmall.order.event.OrderEventType;
@@ -35,7 +36,7 @@ public class OrderEventProcessor {
     public void process(OrderEventOutbox outbox) {
         OrderStockEventPayload payload = orderEventService.parsePayload(outbox.getPayload());
         if (payload == null || payload.getOrderId() == null) {
-            throw new IllegalArgumentException("订单事件负载不合法");
+            throw new BizException("订单事件负载不合法");
         }
 
         if (!tryStartProcess(payload, outbox.getEventType())) {

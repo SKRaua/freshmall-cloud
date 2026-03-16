@@ -6,11 +6,13 @@ import com.freshmall.common.ResponseCode;
 import com.freshmall.common.entity.Order;
 import com.freshmall.common.entity.Thing;
 import com.freshmall.common.entity.User;
+import com.freshmall.common.exception.BizException;
 import com.freshmall.order.constant.OrderStatusConstants;
 import com.freshmall.order.event.OrderEventType;
 import com.freshmall.order.event.OrderStockEventPayload;
 import com.freshmall.order.feign.ThingFeignClient;
 import com.freshmall.order.feign.UserFeignClient;
+import com.freshmall.order.mapper.CartMapper;
 import com.freshmall.order.mapper.OrderMapper;
 import com.freshmall.order.service.OrderService;
 import com.freshmall.order.service.event.OrderEventService;
@@ -22,7 +24,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,6 +42,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     @Autowired
     UserFeignClient userFeignClient;
+
+    @Autowired
+    CartMapper cartMapper;
 
     @Autowired
     OrderEventService orderEventService;
@@ -62,19 +69,25 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Override
     @Transactional
     public Order createOrder(Order order) {
+        String paymentNo = generatePaymentNo();
+        return createOrder(order, paymentNo);
+    }
+
+    private Order createOrder(Order order, String paymentNo) {
         validateCreateOrder(order);
         int count = Integer.parseInt(order.getCount());
 
         APIResponse<?> reserveResp = thingFeignClient.reserveStock(order.getThingId(), count);
         if (reserveResp == null || reserveResp.getCode() != ResponseCode.SUCCESS.getCode()) {
-            throw new IllegalArgumentException("库存不足");
+            throw new BizException("库存不足");
         }
 
         boolean needCompensation = true;
         long ct = System.currentTimeMillis();
         try {
             order.setOrderTime(String.valueOf(ct));
-            order.setOrderNumber(String.valueOf(ct));
+            order.setOrderNumber(generateOrderNumber(ct));
+            order.setPaymentNo(paymentNo);
             order.setStatus(OrderStatusConstants.PENDING_PAY);
             mapper.insert(order);
 
@@ -92,6 +105,55 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 }
             }
         }
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> submitOrder(String mode, String userId, String thingId, Integer count, String cartIds,
+            String receiverName, String receiverPhone, String receiverAddress, String remark) {
+        if (!StringUtils.hasText(userId)) {
+            throw new BizException("用户不能为空");
+        }
+        if (!StringUtils.hasText(receiverName)) {
+            throw new BizException("收货人不能为空");
+        }
+
+        String finalMode = normalizeMode(mode, cartIds);
+        String paymentNo = generatePaymentNo();
+        if ("cart".equals(finalMode)) {
+            return submitCartOrder(userId, cartIds, receiverName, receiverPhone, receiverAddress, remark, paymentNo);
+        }
+        return submitDirectOrder(userId, thingId, count, receiverName, receiverPhone, receiverAddress, remark,
+                paymentNo);
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> payByPaymentNo(String paymentNo, String userId) {
+        if (!StringUtils.hasText(paymentNo)) {
+            throw new BizException("paymentNo不能为空");
+        }
+
+        List<Order> pendingOrders = mapper.listByPaymentNoAndStatus(paymentNo, OrderStatusConstants.PENDING_PAY,
+                userId);
+        if (pendingOrders == null || pendingOrders.isEmpty()) {
+            throw new BizException("待支付订单不存在或已支付");
+        }
+
+        String payTime = String.valueOf(System.currentTimeMillis());
+        int affected = mapper.payByPaymentNo(paymentNo, OrderStatusConstants.PENDING_PAY, OrderStatusConstants.TO_SHIP,
+                payTime, userId);
+        if (affected <= 0) {
+            throw new BizException("支付失败，请重试");
+        }
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("paymentNo", paymentNo);
+        data.put("paidCount", affected);
+        data.put("payTime", payTime);
+        data.put("nextStatus", OrderStatusConstants.TO_SHIP);
+        data.put("orderIds", pendingOrders.stream().map(Order::getId).collect(Collectors.toList()));
+        return data;
     }
 
     @Override
@@ -245,16 +307,16 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     private void validateCreateOrder(Order order) {
         if (order == null || !StringUtils.hasText(order.getThingId()) || !StringUtils.hasText(order.getUserId())) {
-            throw new IllegalArgumentException("参数错误");
+            throw new BizException("参数错误");
         }
         int count = parsePositiveInt(order.getCount(), -1);
         if (count <= 0) {
-            throw new IllegalArgumentException("商品数量不合法");
+            throw new BizException("商品数量不合法");
         }
 
         Thing thing = thingFeignClient.getThingById(order.getThingId());
         if (thing == null) {
-            throw new IllegalArgumentException("商品不存在");
+            throw new BizException("商品不存在");
         }
     }
 
@@ -273,5 +335,141 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         payload.setThingId(thingId);
         payload.setCount(count);
         return payload;
+    }
+
+    private Map<String, Object> submitDirectOrder(String userId, String thingId, Integer count, String receiverName,
+            String receiverPhone, String receiverAddress, String remark, String paymentNo) {
+        if (!StringUtils.hasText(thingId)) {
+            throw new BizException("商品不能为空");
+        }
+        int finalCount = (count == null || count <= 0) ? 1 : count;
+
+        Order order = new Order();
+        order.setUserId(userId);
+        order.setThingId(thingId);
+        order.setCount(String.valueOf(finalCount));
+        order.setReceiverName(receiverName);
+        order.setReceiverPhone(receiverPhone);
+        order.setReceiverAddress(receiverAddress);
+        order.setRemark(remark);
+        Order created = createOrder(order, paymentNo);
+
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        Thing thing = thingFeignClient.getThingById(thingId);
+        if (thing != null && StringUtils.hasText(thing.getPrice())) {
+            totalAmount = new BigDecimal(thing.getPrice()).multiply(BigDecimal.valueOf(finalCount));
+        }
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("paymentNo", paymentNo);
+        data.put("orderCount", 1);
+        data.put("totalAmount", totalAmount);
+        data.put("orderIds", Collections.singletonList(created.getId()));
+        data.put("firstOrderId", created.getId());
+        data.put("orderNumbers", Collections.singletonList(created.getOrderNumber()));
+        return data;
+    }
+
+    private Map<String, Object> submitCartOrder(String userId, String cartIds, String receiverName,
+            String receiverPhone,
+            String receiverAddress, String remark, String paymentNo) {
+        List<Long> selectedIds = parseCartIds(cartIds);
+        if (selectedIds.isEmpty()) {
+            throw new BizException("请至少选择一条购物车记录");
+        }
+
+        List<com.freshmall.common.entity.Cart> carts = cartMapper.getUserCartListByIds(userId, selectedIds);
+        if (carts.size() != selectedIds.size()) {
+            throw new BizException("购物车记录不存在或无权限");
+        }
+
+        Map<String, Thing> thingMap = new HashMap<>();
+        for (com.freshmall.common.entity.Cart cart : carts) {
+            Thing thing = thingFeignClient.getThingById(cart.getThingId());
+            if (thing == null) {
+                throw new BizException("存在已下架商品");
+            }
+            if (cart.getCount() > thing.getRepertory()) {
+                throw new BizException("商品库存不足: " + thing.getTitle());
+            }
+            thingMap.put(cart.getThingId(), thing);
+        }
+
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        List<Long> orderIds = new ArrayList<>();
+        List<String> orderNumbers = new ArrayList<>();
+
+        for (com.freshmall.common.entity.Cart cart : carts) {
+            Order order = new Order();
+            order.setUserId(userId);
+            order.setThingId(cart.getThingId());
+            order.setCount(String.valueOf(cart.getCount()));
+            order.setReceiverName(receiverName);
+            order.setReceiverPhone(receiverPhone);
+            order.setReceiverAddress(receiverAddress);
+            order.setRemark(remark);
+
+            Order created = createOrder(order, paymentNo);
+            orderIds.add(created.getId());
+            orderNumbers.add(created.getOrderNumber());
+
+            Thing thing = thingMap.get(cart.getThingId());
+            BigDecimal price = new BigDecimal(thing.getPrice());
+            totalAmount = totalAmount.add(price.multiply(BigDecimal.valueOf(cart.getCount())));
+        }
+
+        cartMapper.deleteBatchIds(selectedIds);
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("paymentNo", paymentNo);
+        data.put("orderCount", orderIds.size());
+        data.put("totalAmount", totalAmount);
+        data.put("cartIds", selectedIds);
+        data.put("orderIds", orderIds);
+        data.put("firstOrderId", orderIds.isEmpty() ? null : orderIds.get(0));
+        data.put("orderNumbers", orderNumbers);
+        return data;
+    }
+
+    private List<Long> parseCartIds(String cartIds) {
+        if (!StringUtils.hasText(cartIds)) {
+            return Collections.emptyList();
+        }
+        List<Long> ids = new ArrayList<>();
+        String[] arr = cartIds.split(",");
+        for (String raw : arr) {
+            String trimmed = raw == null ? "" : raw.trim();
+            if (!StringUtils.hasText(trimmed)) {
+                continue;
+            }
+            try {
+                ids.add(Long.valueOf(trimmed));
+            } catch (NumberFormatException ex) {
+                throw new BizException("购物车ID格式错误");
+            }
+        }
+        return ids.stream().distinct().collect(Collectors.toList());
+    }
+
+    private String normalizeMode(String mode, String cartIds) {
+        if (StringUtils.hasText(mode)) {
+            String normalized = mode.trim().toLowerCase(Locale.ROOT);
+            if ("direct".equals(normalized) || "cart".equals(normalized)) {
+                return normalized;
+            }
+            throw new BizException("mode仅支持direct或cart");
+        }
+        return StringUtils.hasText(cartIds) ? "cart" : "direct";
+    }
+
+    private String generatePaymentNo() {
+        long now = System.currentTimeMillis();
+        int suffix = ThreadLocalRandom.current().nextInt(1000, 9999);
+        return "PAY" + now + suffix;
+    }
+
+    private String generateOrderNumber(long now) {
+        int suffix = ThreadLocalRandom.current().nextInt(100000, 999999);
+        return "O" + now + suffix;
     }
 }

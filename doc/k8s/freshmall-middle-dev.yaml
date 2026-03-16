@@ -86,6 +86,7 @@ spec:
           image: mysql:8.0
           ports:
             - containerPort: 3306
+              hostPort: 3306
           env:
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
@@ -102,15 +103,25 @@ spec:
             - name: mysql-data
               mountPath: /var/lib/mysql
           readinessProbe:
-            tcpSocket:
-              port: 3306
+            exec:
+              command:
+                - sh
+                - -c
+                - mysqladmin ping -h 127.0.0.1 -uroot -p"$MYSQL_ROOT_PASSWORD" --silent
             initialDelaySeconds: 20
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
           livenessProbe:
-            tcpSocket:
-              port: 3306
+            exec:
+              command:
+                - sh
+                - -c
+                - mysqladmin ping -h 127.0.0.1 -uroot -p"$MYSQL_ROOT_PASSWORD" --silent
             initialDelaySeconds: 40
             periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
       volumes:
         - name: mysql-data
           persistentVolumeClaim:
@@ -153,6 +164,7 @@ spec:
               value: derby
           ports:
             - containerPort: 8848
+              hostPort: 8848
           readinessProbe:
             tcpSocket:
               port: 8848
@@ -200,6 +212,7 @@ spec:
             - yes
           ports:
             - containerPort: 6379
+              hostPort: 6379
           volumeMounts:
             - name: redis-data
               mountPath: /data
@@ -250,7 +263,9 @@ spec:
           image: rabbitmq:3.13-management-alpine
           ports:
             - containerPort: 5672
+              hostPort: 5672
             - containerPort: 15672
+              hostPort: 15672
           env:
             - name: RABBITMQ_DEFAULT_USER
               valueFrom:

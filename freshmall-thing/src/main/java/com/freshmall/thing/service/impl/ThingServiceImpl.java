@@ -98,7 +98,7 @@ public class ThingServiceImpl extends ServiceImpl<ThingMapper, Thing> implements
         }
         mapper.insert(thing);
         // 预热详情缓存，减少新商品首次访问回源
-        self.refreshThingCache(thing);
+        self.refreshThingCache(buildCacheThing(thing));
     }
 
     @Override
@@ -190,7 +190,40 @@ public class ThingServiceImpl extends ServiceImpl<ThingMapper, Thing> implements
     // 使用 CachePut 将最新详情写回缓存；Redis 故障时由统一错误处理器兜底
     @CachePut(key = "#thing.id", condition = "#thing != null && #thing.id != null")
     public Thing refreshThingCache(Thing thing) {
-        return thing;
+        return buildCacheThing(thing);
+    }
+
+    private Thing buildCacheThing(Thing thing) {
+        if (thing == null) {
+            return null;
+        }
+
+        // 仅缓存可序列化且业务需要的字段，特别保留 cover（图片编号/路径）。
+        Thing cacheThing = new Thing();
+        cacheThing.setId(thing.getId());
+        cacheThing.setTitle(thing.getTitle());
+        cacheThing.setCover(thing.getCover());
+        cacheThing.setDescription(thing.getDescription());
+        cacheThing.setPrice(thing.getPrice());
+        cacheThing.setStatus(thing.getStatus());
+        cacheThing.setCreateTime(thing.getCreateTime());
+        cacheThing.setScore(thing.getScore());
+        cacheThing.setPinzhong(thing.getPinzhong());
+        cacheThing.setBaozhiqi(thing.getBaozhiqi());
+        cacheThing.setShengchanriqi(thing.getShengchanriqi());
+        cacheThing.setRepertory(thing.getRepertory());
+        cacheThing.setPv(thing.getPv());
+        cacheThing.setRate(thing.getRate());
+        cacheThing.setRecommendCount(thing.getRecommendCount());
+        cacheThing.setWishCount(thing.getWishCount());
+        cacheThing.setCollectCount(thing.getCollectCount());
+        cacheThing.setClassificationId(thing.getClassificationId());
+        cacheThing.setTags(thing.getTags());
+        cacheThing.setUserId(thing.getUserId());
+
+        // MultipartFile 由 Servlet 容器实现，不可序列化，不能进入 Redis 缓存值。
+        cacheThing.setImageFile(null);
+        return cacheThing;
     }
 
     @Override

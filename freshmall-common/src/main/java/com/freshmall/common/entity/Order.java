@@ -11,7 +11,7 @@ import java.io.Serializable;
 @Data
 @TableName("b_order")
 public class Order implements Serializable {
-    @TableId(value = "id",type = IdType.AUTO)
+    @TableId(value = "id", type = IdType.AUTO)
     public Long id;
     @TableField
     public String status;
@@ -27,6 +27,8 @@ public class Order implements Serializable {
     public String count;
     @TableField
     public String orderNumber; // 订单编号
+    @TableField
+    public String paymentNo; // 聚合支付单号
     @TableField
     public String receiverAddress;
     @TableField

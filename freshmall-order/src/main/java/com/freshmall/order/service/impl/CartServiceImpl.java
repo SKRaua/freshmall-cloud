@@ -1,8 +1,8 @@
 package com.freshmall.order.service.impl;
 
 import com.freshmall.common.entity.Cart;
-import com.freshmall.common.entity.Order;
 import com.freshmall.common.entity.Thing;
+import com.freshmall.common.exception.BizException;
 import com.freshmall.order.feign.ThingFeignClient;
 import com.freshmall.order.mapper.CartMapper;
 import com.freshmall.order.service.CartService;
@@ -12,9 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -34,7 +32,7 @@ public class CartServiceImpl implements CartService {
     @Override
     public List<Cart> getUserCartList(String userId) {
         if (StringUtils.isBlank(userId)) {
-            throw new IllegalArgumentException("用户不能为空");
+            throw new BizException("用户不能为空");
         }
         List<Cart> list = cartMapper.getUserCartList(userId);
         fillThingInfo(list);
@@ -45,16 +43,16 @@ public class CartServiceImpl implements CartService {
     @Transactional
     public void addCart(String userId, String thingId, Integer count) {
         if (StringUtils.isBlank(userId) || StringUtils.isBlank(thingId)) {
-            throw new IllegalArgumentException("参数不完整");
+            throw new BizException("参数不完整");
         }
         int finalCount = (count == null || count < 1) ? 1 : count;
 
         Thing thing = thingFeignClient.getThingById(thingId);
         if (thing == null) {
-            throw new IllegalArgumentException("商品不存在");
+            throw new BizException("商品不存在");
         }
         if (thing.getRepertory() <= 0) {
-            throw new IllegalArgumentException("商品库存不足");
+            throw new BizException("商品库存不足");
         }
 
         Cart cart = new Cart();
@@ -71,15 +69,15 @@ public class CartServiceImpl implements CartService {
     @Transactional
     public void updateCartCount(String userId, Long id, Integer count) {
         if (StringUtils.isBlank(userId) || id == null || count == null || count < 1) {
-            throw new IllegalArgumentException("参数不合法");
+            throw new BizException("参数不合法");
         }
         Cart cart = checkCartOwnership(userId, id);
         Thing thing = thingFeignClient.getThingById(cart.getThingId());
         if (thing == null) {
-            throw new IllegalArgumentException("商品不存在");
+            throw new BizException("商品不存在");
         }
         if (count > thing.getRepertory()) {
-            throw new IllegalArgumentException("超出库存上限");
+            throw new BizException("超出库存上限");
         }
 
         cart.setCount(count);
@@ -98,80 +96,17 @@ public class CartServiceImpl implements CartService {
     @Transactional
     public Map<String, Object> checkout(String userId, String ids, String receiverName, String receiverPhone,
             String receiverAddress, String remark) {
-        if (StringUtils.isBlank(userId)) {
-            throw new IllegalArgumentException("用户不能为空");
-        }
-        if (StringUtils.isBlank(receiverName)) {
-            throw new IllegalArgumentException("收货人不能为空");
-        }
-
-        List<Long> selectedIds = parseIds(ids);
-        if (selectedIds.isEmpty()) {
-            throw new IllegalArgumentException("请至少选择一条购物车记录");
-        }
-
-        List<Cart> carts = cartMapper.getUserCartListByIds(userId, selectedIds);
-        if (carts.size() != selectedIds.size()) {
-            throw new IllegalArgumentException("购物车记录不存在或无权限");
-        }
-
-        fillThingInfo(carts);
-
-        Map<String, Thing> thingMap = new HashMap<>();
-        for (Cart cart : carts) {
-            Thing thing = thingFeignClient.getThingById(cart.getThingId());
-            if (thing == null) {
-                throw new IllegalArgumentException("存在已下架商品");
-            }
-            if (cart.getCount() > thing.getRepertory()) {
-                throw new IllegalArgumentException("商品库存不足: " + thing.getTitle());
-            }
-            thingMap.put(cart.getThingId(), thing);
-        }
-
-        BigDecimal totalAmount = BigDecimal.ZERO;
-        int orderCount = 0;
-        List<Long> orderIds = new java.util.ArrayList<>();
-
-        for (Cart cart : carts) {
-            Thing thing = thingMap.get(cart.getThingId());
-
-            Order order = new Order();
-            order.setUserId(userId);
-            order.setThingId(cart.getThingId());
-            order.setCount(String.valueOf(cart.getCount()));
-            order.setReceiverName(receiverName);
-            order.setReceiverPhone(receiverPhone);
-            order.setReceiverAddress(receiverAddress);
-            order.setRemark(remark);
-            Order createdOrder = orderService.createOrder(order);
-            if (createdOrder != null && createdOrder.getId() != null) {
-                orderIds.add(createdOrder.getId());
-            }
-            orderCount++;
-
-            BigDecimal price = new BigDecimal(thing.getPrice());
-            totalAmount = totalAmount.add(price.multiply(BigDecimal.valueOf(cart.getCount())));
-        }
-
-        cartMapper.deleteBatchIds(selectedIds);
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("orderCount", orderCount);
-        result.put("totalAmount", totalAmount);
-        result.put("cartIds", selectedIds);
-        result.put("orderIds", orderIds);
-        result.put("firstOrderId", orderIds.isEmpty() ? null : orderIds.get(0));
-        return result;
+        return orderService.submitOrder("cart", userId, null, null, ids, receiverName, receiverPhone,
+                receiverAddress, remark);
     }
 
     private Cart checkCartOwnership(String userId, Long id) {
         Cart cart = cartMapper.selectById(id);
         if (cart == null) {
-            throw new IllegalArgumentException("购物车记录不存在");
+            throw new BizException("购物车记录不存在");
         }
         if (!StringUtils.equals(userId, cart.getUserId())) {
-            throw new IllegalArgumentException("无权限操作该购物车记录");
+            throw new BizException("无权限操作该购物车记录");
         }
         return cart;
     }
