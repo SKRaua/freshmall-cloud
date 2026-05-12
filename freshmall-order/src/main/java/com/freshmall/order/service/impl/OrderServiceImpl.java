@@ -77,6 +77,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         validateCreateOrder(order);
         int count = Integer.parseInt(order.getCount());
 
+        // 1. 内存高速预扣减：调用远程商品服务预扣 Redis 缓存库存，拦截非法的高并发超卖请求
         APIResponse<?> reserveResp = thingFeignClient.reserveStock(order.getThingId(), count);
         if (reserveResp == null || reserveResp.getCode() != ResponseCode.SUCCESS.getCode()) {
             throw new BizException("库存不足");
@@ -89,8 +90,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             order.setOrderNumber(generateOrderNumber(ct));
             order.setPaymentNo(paymentNo);
             order.setStatus(OrderStatusConstants.PENDING_PAY);
+            // 2. 主业务落库：将订单实体插入数据库（同处于 @Transactional 事务中）
             mapper.insert(order);
 
+            // 3. 生成 Outbox 本地消息表记录：保证本地事务与MQ事件派发的高度一致性
             String eventId = UUID.randomUUID().toString();
             orderEventService.saveOutboxEvent(eventId, order.getId(), OrderEventType.ORDER_CREATED,
                     buildPayload(eventId, order.getId(), order.getThingId(), count));
@@ -98,6 +101,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             return order;
         } finally {
             if (needCompensation) {
+                // 4. 补偿机制：一旦订单写入 DB 或写 Outbox 发件箱失败（或发生其它异常），立即回补并释放已占用 Redis 预扣库存
                 try {
                     thingFeignClient.unreserveStock(order.getThingId(), count);
                 } catch (Exception ex) {
@@ -119,10 +123,16 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
 
         String finalMode = normalizeMode(mode, cartIds);
+
+        // 1. 生成全局聚合支付单号：确保无论单品还是购物车多品，都通过单一单号进行统筹支付和状态扭转
         String paymentNo = generatePaymentNo();
+
         if ("cart".equals(finalMode)) {
+            // 2. 购物车分支：校验多条记录及库存，并分拆生成子订单（共享该 paymentNo）
             return submitCartOrder(userId, cartIds, receiverName, receiverPhone, receiverAddress, remark, paymentNo);
         }
+
+        // 3. 直购分支：直接针对单一商品生成订单
         return submitDirectOrder(userId, thingId, count, receiverName, receiverPhone, receiverAddress, remark,
                 paymentNo);
     }
@@ -134,6 +144,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             throw new BizException("paymentNo不能为空");
         }
 
+        // 通过唯一的聚合支付单号找到所有相关的待支付子订单
         List<Order> pendingOrders = mapper.listByPaymentNoAndStatus(paymentNo, OrderStatusConstants.PENDING_PAY,
                 userId);
         if (pendingOrders == null || pendingOrders.isEmpty()) {
@@ -141,6 +152,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
 
         String payTime = String.valueOf(System.currentTimeMillis());
+        // 统一流转所有处于 PENDING_PAY 状态的子订单到 TO_SHIP（待发货），保证同批次车购物车支付状态一致
         int affected = mapper.payByPaymentNo(paymentNo, OrderStatusConstants.PENDING_PAY, OrderStatusConstants.TO_SHIP,
                 payTime, userId);
         if (affected <= 0) {
@@ -301,6 +313,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             return;
         }
         String eventId = UUID.randomUUID().toString();
+        // 生成取消订单的 Outbox 事件（ORDER_CANCELED），后续 MQ 消费者将基于此执行对应商品库存的回补和释放操作
         orderEventService.saveOutboxEvent(eventId, order.getId(), OrderEventType.ORDER_CANCELED,
                 buildPayload(eventId, order.getId(), order.getThingId(), count));
     }

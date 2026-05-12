@@ -37,6 +37,9 @@ public class ThingServiceImpl extends ServiceImpl<ThingMapper, Thing> implements
 
     private static final String STOCK_KEY_PREFIX = "freshmall:stock:thing:";
 
+    // 使用内嵌的 Lua 脚本保证 Redis 预扣减库存的原子性
+    // Lua 脚本执行逻辑：“获取锁(KEYS) → 检查库存(ARGV判断) → 扣减库存 → 释放锁(隐式返回)”
+    // Redis 采用单线程执行 Lua 脚本，执行期间不会被其他命令插队，从根本上防止高并发超卖。
     private static final DefaultRedisScript<Long> RESERVE_STOCK_SCRIPT = new DefaultRedisScript<>(
             "local v = redis.call('GET', KEYS[1]);"
                     + "if (not v) then return -2 end;"
@@ -249,26 +252,33 @@ public class ThingServiceImpl extends ServiceImpl<ThingMapper, Thing> implements
 
         initStockCacheIfAbsent(thingId);
         String key = buildStockKey(thingId);
+        // 原生 execute 调用，将 key 和扣减数量传入上面的 Lua 脚本中执行
         Long result = stringRedisTemplate.execute(RESERVE_STOCK_SCRIPT, Collections.singletonList(key),
                 String.valueOf(count));
         return result != null && result >= 0;
     }
 
     @Override
+    // 最终扣减库存（MQ 消费者调用）：在订单创建成功后，负责将 DB 里的实体库存彻底扣除。
+    // 同时清理商品详情缓存，确保前台页面展示最新库存。
     @CacheEvict(key = "#thingId", condition = "#thingId != null && !#thingId.trim().isEmpty()")
     public boolean confirmDeductStock(String thingId, int count) {
         if (count <= 0 || thingId == null || thingId.trim().isEmpty()) {
             return false;
         }
+        // 执行 DB 层面的行锁扣减
         boolean success = mapper.deductStock(thingId, count) > 0;
         if (!success && stringRedisTemplate != null) {
-            // 缓存已预占但 DB 扣减失败时，进行补偿回补。
+            // 极限补偿机制：如果缓存前面预占成功了，但落库时由于某些极端原因（如手工改库导致库存成了负数）被 DB 拒绝，
+            // 此时必须把 Redis 里被吃掉的额度还回来，防止数据割裂。
             stringRedisTemplate.opsForValue().increment(buildStockKey(thingId), count);
         }
         return success;
     }
 
     @Override
+    // 释放并恢复库存（MQ 消费者调用 - 对应取消订单）：当订单被主动取消或超时未支付时触发。
+    // 需要双管齐下：既要归还 Redis 中预扣的共享库存，也要增加 DB 里的实际库存。
     @CacheEvict(key = "#thingId", condition = "#thingId != null && !#thingId.trim().isEmpty()")
     public boolean releaseStock(String thingId, int count) {
         if (count <= 0 || thingId == null || thingId.trim().isEmpty()) {
@@ -276,12 +286,16 @@ public class ThingServiceImpl extends ServiceImpl<ThingMapper, Thing> implements
         }
         if (stringRedisTemplate != null) {
             initStockCacheIfAbsent(thingId);
+            // 归还 Redis 预扣缓存量
             stringRedisTemplate.opsForValue().increment(buildStockKey(thingId), count);
         }
+        // 归还底层 DB 实体库存
         return mapper.increaseStock(thingId, count) > 0;
     }
 
     @Override
+    // 纯缓存回流（订单服务 RPC 同步调用）：专用于订单创建“主事务中途发生异常（例如扣款失败或 Outbox 存储失败）”。
+    // 仅仅因为预扣成功了，但并没有进行任何 DB 扣减，所以只需单独释放 Redis 里的缓存占有量，无需碰实体的 DB 库存。
     public boolean unreserveStock(String thingId, int count) {
         if (count <= 0 || thingId == null || thingId.trim().isEmpty()) {
             return false;
@@ -290,10 +304,13 @@ public class ThingServiceImpl extends ServiceImpl<ThingMapper, Thing> implements
             return true;
         }
         initStockCacheIfAbsent(thingId);
+        // 使用原子递增归还 Redis 容量
         Long value = stringRedisTemplate.opsForValue().increment(buildStockKey(thingId), count);
         return value != null;
     }
 
+    // 缓存懒加载兜底机制：一旦 Redis 里的库存缓存由于过期或重启而丢失，
+    // 在下一次请求时安全地通过查询 DB 将当前可用真实库存重载回 Redis。
     private void initStockCacheIfAbsent(String thingId) {
         if (stringRedisTemplate == null) {
             return;
@@ -301,12 +318,14 @@ public class ThingServiceImpl extends ServiceImpl<ThingMapper, Thing> implements
         String key = buildStockKey(thingId);
         Boolean exists = stringRedisTemplate.hasKey(key);
         if (Boolean.TRUE.equals(exists)) {
+            // 已存在，不用预热
             return;
         }
         Thing thing = mapper.selectById(thingId);
         if (thing == null) {
             return;
         }
+        // 使用 setIfAbsent (SETNX) 确保并发下只有一个线程可以成功重建缓存
         stringRedisTemplate.opsForValue().setIfAbsent(key, String.valueOf(Math.max(thing.getRepertory(), 0)));
     }
 
